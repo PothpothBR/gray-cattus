@@ -1,0 +1,12 @@
+{
+    "files.associations": {
+        "*.pys": "python",
+        "*.pyp": "python",
+        "*.ipp": "cpp",
+        "iostream": "cpp",
+        "coroutine": "cpp",
+        "ostream": "cpp",
+        "semaphore": "cpp",
+        "stop_token": "cpp"
+    }
+}
