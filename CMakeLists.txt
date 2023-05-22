@@ -19,7 +19,6 @@ project(GrayCattusTests
 
 add_executable(GrayCattus main.cpp)
 
-
 add_executable(GrayCattusTests test.cpp)
 
 set(OPENSSL_ROOT_DIR "C:/Program Files/OpenSSL")
@@ -32,7 +31,7 @@ find_package(PostgreSQL REQUIRED)
 target_link_libraries(GrayCattus PRIVATE PostgreSQL::PostgreSQL)
 
 set(BOOST_ROOT "C:/Program Files/boost")
-find_package(Boost REQUIRED)
+find_package(Boost 1.82.0 REQUIRED COMPONENTS json)
 
 target_include_directories(GrayCattus PRIVATE ${Boost_INCLUDE_DIRS})
 target_link_directories(GrayCattus PRIVATE ${Boost_LIBRARY_DIRS})
