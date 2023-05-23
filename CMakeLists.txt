@@ -5,6 +5,8 @@ if(${CMAKE_VERSION} VERSION_LESS 3.12)
     cmake_policy(VERSION ${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION})
 endif()
 
+set(CMAKE_CXX_STANDARD 17)
+
 project(GrayCattus
     VERSION 1.0
     DESCRIPTION "Cattus API"
@@ -18,7 +20,6 @@ project(GrayCattusTests
 )
 
 add_executable(GrayCattus main.cpp)
-
 
 add_executable(GrayCattusTests test.cpp)
 

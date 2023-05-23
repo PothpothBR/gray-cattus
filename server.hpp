@@ -4,6 +4,7 @@
 #include <boost/beast/http.hpp>
 #include <boost/beast/ssl.hpp>
 #include <boost/beast/version.hpp>
+#include <boost/filesystem.hpp>
 #include <boost/json.hpp>
 #include <thread>
 #include "database.hpp"
@@ -46,39 +47,12 @@ public:
         ctx->use_private_key_file("CAKey.pem", asio::ssl::context::pem);
 
         acceptor = new asio::ip::tcp::acceptor(*ioc, { _addr, _port });
-
-        new Command("TestCommand", [](CommandArgs args) {
-            cout << "calling command" << endl;
-        return 0;
-            });
     }
 
     ~Server() {
         delete acceptor;
-    }
-
-    void handle(
-        beast::http::request<beast::http::dynamic_body>& request,
-        beast::http::response<beast::http::dynamic_body>& response
-    ) {
-        db::Connection db("localhost", "5432", "feneco_database", "postgres", "chopinzinho0202");
-
-        std::cout << endl << "sexo?: " << request.at("command");
-
-        response.version(request.version());
-        response.keep_alive(false);
-        response.result(beast::http::status::ok);
-        response.set(beast::http::field::server, "GrayCattus");
-
-        response.set(beast::http::field::content_type, "text/json");
-
-        db::Data* dt = db.execute("select * from products");
-
-        json::object json_response;
-
-        json_response.emplace("name", dt->getString("name"));
-
-        beast::ostream(response.body()) << json::serialize(dt->getJsonData());
+        delete ctx;
+        delete ioc;
     }
 
     void run() {
@@ -102,20 +76,92 @@ public:
             }
 
             // le a requisição
-            beast::http::request<beast::http::dynamic_body> request;
-            beast::http::response<beast::http::dynamic_body> response;
+            beast::http::request<beast::http::string_body> request;
+            beast::http::response<beast::http::string_body> response;
+            CommandResult result;
 
+            // monta o buffer
             beast::flat_buffer buffer(8192);
+
+            // le a requisição
             beast::http::read(stream, buffer, request);
 
-            handle(request, response);
+            std::string command_args = request.at("args");
 
-            string command = request.at("command");
+            // monta os dados para o comando
+            CommandData args;
+            try {
+                args.update(command_args);
+            }
+            catch (std::exception e) {
+                cmn::error(e.what());
+                response.result(beast::http::status::bad_request);
+                response.keep_alive(false);
+                response.reason(e.what());
+                beast::http::write(stream, response);
+                continue;
+            }
 
-            Command::run(command.data(), 0);
+            // recupera o nome do comando
+            std::string command_name = request.at("command");
+            if (!command_name.size()) {
+                cmn::error("comando nao especificado");
+                response.result(beast::http::status::bad_request);
+                response.keep_alive(false);
+                response.reason("comando nao especificado");
+                beast::http::write(stream, response);
+                continue;
+            }
+            
+            // busca pelo comando
+            Command &command = Command::find(command_name.data());
+            if (!&command) {
+                cmn::error("comando nao encontrado");
+                response.result(beast::http::status::not_found);
+                response.keep_alive(false);
+                response.reason("comando nao encontrado");
+                beast::http::write(stream, response);
+                continue;
+            }
 
+            // executa o comando
+            try {
+                result = command.Command::run(command_name.data(), args);
+            }
+            catch (std::exception e) {
+                cmn::error(e.what());
+                response.result(beast::http::status::internal_server_error);
+                response.keep_alive(false);
+                response.body() = e.what();
+                response.set(beast::http::field::content_type, "text/text");
+                response.content_length(response.body().size());
+                beast::http::write(stream, response);
+                continue;
+            }
+
+            // verifica o resultado do comando
+            if (result == CommandResult::Error) {
+                cmn::error("falha ao executar comando");
+                response.result(beast::http::status::not_acceptable);
+                response.keep_alive(false);
+                response.reason("falha ao executar comando");
+                beast::http::write(stream, response);
+                continue;
+            }
+
+            // configura o response
+            response.version(request.version());
+            response.keep_alive(false);
+            response.result(beast::http::status::ok);
+            response.reason("sucesso");
+            response.set(beast::http::field::server, "GrayCattus");
+            response.set(beast::http::field::content_type, "text/json");
+
+            // adiciona os dados do comando
+            response.body() = command.getResponse();
             response.content_length(response.body().size());
             
+            // envia o response
             beast::http::write(stream, response);
         }
     }
