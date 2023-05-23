@@ -33,7 +33,11 @@ find_package(PostgreSQL REQUIRED)
 target_link_libraries(GrayCattus PRIVATE PostgreSQL::PostgreSQL)
 
 set(BOOST_ROOT "C:/Program Files/boost")
+if (UNIX)
 find_package(Boost 1.82.0 REQUIRED COMPONENTS json)
+else ()
+find_package(Boost 1.82.0 REQUIRED)
+endif (UNIX)
 
 target_include_directories(GrayCattus PRIVATE ${Boost_INCLUDE_DIRS})
 target_link_directories(GrayCattus PRIVATE ${Boost_LIBRARY_DIRS})
