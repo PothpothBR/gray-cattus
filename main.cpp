@@ -8,7 +8,7 @@ using namespace cattus::server;
 int main(int argc, char* argv[]) {
 	setlocale(LC_ALL, "");
 	Command("EchoCommand", [](CommandData& args, CommandData& response) {
-		std::cout << args.get<int>("time").value();
+		std::cout << args.get<int>("time").value_or(-1);
 		response.update(args);
 		return CommandResult::Sucess;
 	});

@@ -1,7 +1,8 @@
 #include <vector>
 #include <string>
-#include <boost/json.hpp>
+#include <iostream>
 #include <optional>
+#include <boost/json.hpp>
 
 namespace json = boost::json;
 
@@ -39,7 +40,7 @@ public:
 	}
 
 	template<typename T>
-	std::optional<T> get(std::string name) {
+	inline std::optional<T> get(std::string name) {
 		std::optional<T> value;
 		if (args.contains(name)) get(name, value);
 		return value;
@@ -117,6 +118,7 @@ public:
 	}
 
 	CommandResult run(CommandData& args) {
+		std::clog << "Executando comando <" << name << ">" << args.serialize() << std::endl;
 		response.clear();
 		return command(args, response);
 	}
