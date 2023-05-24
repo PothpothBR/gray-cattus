@@ -70,6 +70,10 @@ public:
 		return json::serialize(args);
 	}
 
+	void update(json::object data) {
+		args = data;
+	}
+
 	void update(CommandData data) {
 		args = data.args;
 	}
@@ -118,7 +122,7 @@ public:
 	}
 
 	CommandResult run(CommandData& args) {
-		std::clog << "Executando comando <" << name << ">" << args.serialize() << std::endl;
+		std::clog << std::endl << "Executando comando <" << name << ">" << args.serialize();
 		response.clear();
 		return command(args, response);
 	}

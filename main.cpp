@@ -13,6 +13,21 @@ int main(int argc, char* argv[]) {
 		return CommandResult::Sucess;
 	});
 
+	Command("RevelationCommand", [](CommandData& args, CommandData& response) {
+		std::cout << "Lucas é gay";
+		return CommandResult::Sucess;
+	});
+
+	Command("GetUsers", [](CommandData& args, CommandData& response) {
+
+		cattus::db::Connection conn("localhost", "5432", "feneco_database", "postgres", "chopinzinho0202");
+		std::string query = "select * from users where id = ";
+		query.append(args.get<std::string>("userId").value());
+		cattus::db::Data *data = conn.execute(query.data());
+		response.update(data->getJson());
+		return CommandResult::Sucess;
+	});
+
 	Server server("192.168.0.77", "50500");
 	server.run();
 
