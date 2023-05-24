@@ -8,6 +8,8 @@
 namespace cattus {
 namespace db {
 
+namespace dbg = cattus::debug;
+
 class Connection {
 
     PGconn* conn = nullptr;
@@ -24,7 +26,7 @@ public:
         );
 
         conn = PQconnectdb(params);
-        if (!conn || PQstatus(conn) != CONNECTION_OK) cmn::error("Falha ao conectar ao banco de dados");
+        if (!conn || PQstatus(conn) != CONNECTION_OK) dbg::error("Falha ao conectar ao banco de dados");
         delete[] params;
     }
 
@@ -36,7 +38,7 @@ public:
     cattus::db::Data* execute(const char* query) {
         data = PQexec(conn, query);
         if (!data.status())
-            cmn::error(data.getError());
+            dbg::error(data.getError());
 
         return &data;
     }

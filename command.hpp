@@ -1,3 +1,6 @@
+#ifndef INCLUDE_COMMAND_H
+#define INCLUDE_COMMAND_H
+
 #include <vector>
 #include <string>
 #include <iostream>
@@ -5,6 +8,7 @@
 #include <boost/json.hpp>
 
 namespace json = boost::json;
+namespace dbg = cattus::debug;
 
 class CommandData {
 protected:
@@ -18,7 +22,7 @@ public:
 			this->args = json::parse(args).as_object();
 		}
 		catch (std::exception e) {
-			cmn::error(e.what());
+			dbg::error(e.what());
 			throw std::runtime_error("Argumentos incorretos ou no formato errado");
 		}
 	}
@@ -84,7 +88,7 @@ public:
 			this->args = json::parse(args).as_object();
 		}
 		catch (std::exception e) {
-			cmn::error(e.what());
+			dbg::error(e.what());
 			throw std::runtime_error("Argumentos incorretos ou no formato errado");
 		}
 	}
@@ -122,7 +126,7 @@ public:
 	}
 
 	CommandResult run(CommandData& args) {
-		std::clog << std::endl << "Executando comando <" << name << ">" << args.serialize();
+		dbg::log("%s%s", name, args.serialize().data());
 		response.clear();
 		return command(args, response);
 	}
@@ -162,3 +166,5 @@ public:
 	}
 };
 std::vector<Command> Command::command_table;
+
+#endif //INCLUDE_COMMAND_H

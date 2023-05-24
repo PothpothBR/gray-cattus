@@ -18,12 +18,23 @@ using namespace std;
 
 #ifdef __debug__
 
-namespace cmn {
+namespace cattus {
+namespace debug {
 
 #ifdef __debug_info__
     void info(const char* _Format, ...) {
         char* _RFormat = new char[strlen(_Format) + 11];
         sprintf(_RFormat, "[info] %s\n", _Format);
+        va_list _ArgList;
+        va_start(_ArgList, _Format);
+        vfprintf(stderr, _RFormat, _ArgList);
+        va_end(_ArgList);
+        delete[] _RFormat;
+    }
+
+    void log(const char* _Format, ...) {
+        char* _RFormat = new char[strlen(_Format)+1];
+        sprintf(_RFormat, "%s\n", _Format);
         va_list _ArgList;
         va_start(_ArgList, _Format);
         vfprintf(stderr, _RFormat, _ArgList);
@@ -147,5 +158,6 @@ void error(const char* _Format, ...) {
     throw _RFormat;
 }
 #endif
+}
 }
 #endif // INCLUDE_COMMON_H

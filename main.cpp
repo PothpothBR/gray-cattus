@@ -14,7 +14,7 @@ int main(int argc, char* argv[]) {
 	});
 
 	Command("RevelationCommand", [](CommandData& args, CommandData& response) {
-		std::cout << "Lucas é gay";
+		std::cout << "Lucas Ã© gay";
 		return CommandResult::Sucess;
 	});
 

@@ -1,3 +1,5 @@
+#ifndef INCLUDE_SERVER_H
+#define INCLUDE_SERVER_H
 
 #include <boost/asio.hpp>
 #include <boost/beast/core.hpp>
@@ -19,7 +21,9 @@ namespace server {
 namespace beast = boost::beast;
 namespace asio = boost::asio;
 namespace json = boost::json;
+
 namespace db = cattus::db;
+namespace dbg = cattus::debug;
 
 class Server {
     beast::net::io_context* ioc;
@@ -70,7 +74,7 @@ public:
         stream.handshake(asio::ssl::stream_base::server, ec);
 
         if (ec) {
-            cmn::error(ec.message().data());
+            dbg::error(ec.message().data());
             return;
         }
 
@@ -96,8 +100,8 @@ public:
             args.update(command_args);
         }
         catch (std::exception e) {
-            cmn::error("header incompleto ou incorreto");
-            cmn::error(e.what());
+            dbg::error("header incompleto ou incorreto");
+            dbg::error(e.what());
             response.result(beast::http::status::bad_request);
             response.keep_alive(false);
             response.reason("header incompleto ou incorreto");
@@ -107,7 +111,7 @@ public:
 
         
         if (!command_name.size()) {
-            cmn::error("comando nao especificado");
+            dbg::error("comando nao especificado");
             response.result(beast::http::status::bad_request);
             response.keep_alive(false);
             response.reason("comando nao especificado");
@@ -118,7 +122,7 @@ public:
         // busca pelo comando
         Command &command = Command::find(command_name.data());
         if (!&command) {
-            cmn::error("comando nao encontrado");
+            dbg::error("comando nao encontrado");
             response.result(beast::http::status::not_found);
             response.keep_alive(false);
             response.reason("comando nao encontrado");
@@ -131,7 +135,7 @@ public:
             result = command.Command::run(command_name.data(), args);
         }
         catch (std::exception e) {
-            cmn::error(e.what());
+            dbg::error(e.what());
             response.result(beast::http::status::internal_server_error);
             response.keep_alive(false);
             response.body() = e.what();
@@ -143,7 +147,7 @@ public:
 
         // verifica o resultado do comando
         if (result == CommandResult::Error) {
-            cmn::error("falha ao executar comando");
+            dbg::error("falha ao executar comando");
             response.result(beast::http::status::not_acceptable);
             response.keep_alive(false);
             response.reason("falha ao executar comando");
@@ -172,7 +176,7 @@ public:
             try {
                 handle();
             } catch (std::exception e){
-                cmn::error(e.what());
+                dbg::error(e.what());
             }
         }
     }
@@ -180,3 +184,4 @@ public:
 
 }
 }
+#endif //INCLUDE_SERVER_H
