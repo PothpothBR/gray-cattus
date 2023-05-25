@@ -6,6 +6,7 @@
 #include <iostream>
 #include <optional>
 #include <boost/json.hpp>
+#include "database.hpp"
 
 namespace json = boost::json;
 namespace dbg = cattus::debug;
@@ -99,19 +100,18 @@ enum CommandResult {
 	Sucess = 0
 };
 
-typedef CommandResult(*CommandCallable)(CommandData&, CommandData&);
+typedef CommandResult(CommandCallable)(CommandData&, CommandData&);
 
 class Command {
 	static std::vector<Command> command_table;
 	const char* name;
-	CommandCallable command;
+	CommandCallable &command;
 	CommandData response;
 
 public:
-	Command(const char* name, CommandCallable command) {
+	Command(const char* name, CommandCallable *command): command(std::move(*command)) {
 		this->name = name;
-		this->command = command;
-		command_table.emplace_back(*this);
+		command_table.emplace_back(std::move(*this));
 	}
 
 	static Command& find(const char* name) {
@@ -128,7 +128,16 @@ public:
 	CommandResult run(CommandData& args) {
 		dbg::log("%s%s", name, args.serialize().data());
 		response.clear();
-		return command(args, response);
+		cattus::db::global_conn.begin(); // fails wen multithread
+		try {
+			CommandResult res = command(args, response);
+			cattus::db::global_conn.commit();
+			return res;
+		}
+		catch (exception e) {
+			cattus::db::global_conn.roolback();
+			return CommandResult::Error;
+		}
 	}
 
 	static CommandResult run(const char* name, CommandData& args) {

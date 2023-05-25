@@ -1,5 +1,5 @@
-﻿#ifndef INCLUDE_COMMON_H
-#define INCLUDE_COMMON_H
+﻿#ifndef INCLUDE_DEBUG_H
+#define INCLUDE_DEBUG_H
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -33,7 +33,7 @@ namespace debug {
     }
 
     void log(const char* _Format, ...) {
-        char* _RFormat = new char[strlen(_Format)+1];
+        char* _RFormat = new char[strlen(_Format)+2];
         sprintf(_RFormat, "%s\n", _Format);
         va_list _ArgList;
         va_start(_ArgList, _Format);
@@ -160,4 +160,4 @@ void error(const char* _Format, ...) {
 #endif
 }
 }
-#endif // INCLUDE_COMMON_H
+#endif // INCLUDE_DEBUG_H

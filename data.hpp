@@ -4,7 +4,7 @@
 #include <string.h>
 #include "libpq-fe.h"
 #include <boost/json.hpp>
-#include "common.hpp"
+#include "debug.hpp"
 
 namespace json = boost::json;
 
