@@ -1,7 +1,7 @@
 #ifndef INCLUDE_COMMAND_H
 #define INCLUDE_COMMAND_H
 
-#include <vector>
+#include <unordered_map>
 #include <string>
 #include <iostream>
 #include <optional>
@@ -103,30 +103,29 @@ enum CommandResult {
 typedef CommandResult(CommandCallable)(CommandData&, CommandData&);
 
 class Command {
-	static std::vector<Command> command_table;
-	const char* name;
-	CommandCallable &command;
+	static std::unordered_map<std::string, Command> command_table;
+	std::string name;
+	CommandCallable &&command;
 	CommandData response;
 
 public:
-	Command(const char* name, CommandCallable *command): command(std::move(*command)) {
+
+	Command(std::string name, CommandCallable *command): command(std::move(*command)) {
+		std::cout << "constructor     " << &*this << std::endl;
+		std::cout << "constructor cmd " << &*command << std::endl;
 		this->name = name;
-		command_table.emplace_back(std::move(*this));
+		command = nullptr;
+		command_table.emplace(this->name, std::move(*this));
 	}
 
-	static Command& find(const char* name) {
-		for (Command& command : command_table) {
-			for (char* c = const_cast<char*>(command.name), *n = const_cast<char*>(name); *c == *n; c++, n++) {
-				if (*c == '\0') {
-					return command;
-				}
-			}
-		}
-		return *(Command*)0;
+	static Command& find(std::string name) {
+		return command_table.at(name);
 	}
 
 	CommandResult run(CommandData& args) {
-		dbg::log("%s%s", name, args.serialize().data());
+		std::cout << "run    " << &*this << std::endl;
+		std::cout << "run cmd" << &*command << std::endl;
+		dbg::log("%s%s", name.data(), args.serialize().data());
 		response.clear();
 		cattus::db::global_conn.begin(); // fails wen multithread
 		try {
@@ -141,18 +140,7 @@ public:
 	}
 
 	static CommandResult run(const char* name, CommandData& args) {
-		for (Command& command : command_table) {
-			for (
-				char* c = const_cast<char*>(command.name), *n = const_cast<char*>(name);
-				*c == *n;
-				c++, n++
-				) {
-				if (*c == '\0') {
-					return command.run(args);
-				}
-			}
-		}
-		return CommandResult::Error;
+		return find(name).run(args);
 	}
 
 	CommandResult operator()(CommandData args) {
@@ -165,15 +153,15 @@ public:
 	}
 
 	static void freeCommands() {
-		for (Command& command : command_table) {
+		/*for (Command& command : command_table) {
 			delete &command;
-		}
+		}*/
 	}
 
 	std::string getResponse() {
 		return response.serialize();
 	}
 };
-std::vector<Command> Command::command_table;
+std::unordered_map<std::string, Command> Command::command_table;
 
 #endif //INCLUDE_COMMAND_H
