@@ -30,6 +30,7 @@ public:
             dbg::error("Falha ao conectar ao banco de dados");
             PQerrorMessage(conn);
             PQfinish(conn);
+            conn = nullptr;
         }
 
         // PQtrace(conn, stderr);

@@ -25,6 +25,10 @@ namespace json = boost::json;
 namespace db = cattus::db;
 namespace dbg = cattus::debug;
 
+class Session : std::enable_shared_from_this<Session>{
+
+};
+
 class Server {
     beast::net::io_context* ioc;
     asio::ip::tcp::acceptor* acceptor;
@@ -32,11 +36,11 @@ class Server {
 
 public:
     Server(const char* addr, const char* port) {
-        auto _addr = beast::net::ip::make_address(addr);
+        auto           _addr = beast::net::ip::make_address(addr);
         unsigned short _port = atoi(port);
-        unsigned int thread_count = std::thread::hardware_concurrency();
+        unsigned int   _threads = std::thread::hardware_concurrency();
 
-        ioc = new beast::net::io_context(thread_count);
+        ioc = new beast::net::io_context(_threads);
 
         ctx = new asio::ssl::context(asio::ssl::context::sslv23_server);
 
@@ -50,7 +54,17 @@ public:
 
         ctx->use_private_key_file("CAKey.pem", asio::ssl::context::pem);
 
-        acceptor = new asio::ip::tcp::acceptor(*ioc, { _addr, _port });
+        asio::ip::tcp::endpoint endpoint(_addr, _port);
+        acceptor = new asio::ip::tcp::acceptor(*ioc);
+        acceptor->open(endpoint.protocol());
+
+        acceptor->set_option(beast::net::socket_base::reuse_address(true));
+        
+        acceptor->bind(endpoint);
+
+        acceptor->listen(beast::net::socket_base::max_listen_connections);
+
+        acceptor->async_accept(ioc->get_executor(), std::bind_front(&Server::handle, this));
     }
 
     ~Server() {
@@ -59,13 +73,7 @@ public:
         delete ioc;
     }
 
-    void handle() {
-        beast::error_code ec;
-        // cria o socket
-        asio::ip::tcp::socket socket(*ioc);
-
-        // aceita conex�es
-        acceptor->accept(socket);
+    void handle(beast::error_code ec, asio::ip::tcp::socket socket) {
 
         // cria o fluxo ssl em torno do socket
         beast::ssl_stream<asio::ip::tcp::socket&> stream(socket, *ctx);
@@ -172,9 +180,11 @@ public:
     }
 
     void run() {
+        ioc->run();
+        return;
         while (true) {
             try {
-                handle();
+                // handle();
             } catch (std::exception e){
                 dbg::error(e.what());
             }

@@ -7,18 +7,19 @@
 using namespace cattus::server;
 
 void commands() {
+
 	Command("EchoCommand", [](CommandData& args, CommandData& response) {
 		std::cout << args.get<int>("time").value_or(-1);
 	response.update(args);
 	return CommandResult::Sucess;
 		});
-
+		
 	Command("RevelationCommand", [](CommandData& args, CommandData& response) {
 		std::cout << "Lucas é gay";
 	return CommandResult::Sucess;
 		});
 
-	Command c("GetUsers", [](CommandData& args, CommandData& response) {
+	Command("GetUsers", [](CommandData& args, CommandData& response) {
 
 		//cattus::db::Connection conn("localhost", "5432", "feneco_database", "postgres", "chopinzinho0202");
 		std::string query = "select * from users where id = ";
@@ -27,8 +28,6 @@ void commands() {
 	response.update(data->getJson());
 	return CommandResult::Sucess;
 		});
-
-	std::cout << "create" << &c << std::endl;
 }
 
 int main(int argc, char* argv[]) {
