@@ -7,6 +7,8 @@ endif()
 
 set(CMAKE_CXX_STANDARD 20)
 
+add_compile_options(/bigobj)
+
 project(GrayCattus
     VERSION 1.0
     DESCRIPTION "Cattus API"
@@ -44,3 +46,4 @@ target_link_directories(GrayCattus PRIVATE ${Boost_LIBRARY_DIRS})
 target_link_libraries(GrayCattus PRIVATE ${Boost_LIBRARIES})
 
 target_include_directories(GrayCattus PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+

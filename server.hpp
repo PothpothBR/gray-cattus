@@ -13,7 +13,7 @@
 #include "command.hpp"
 #include <iostream>
 
-
+#define assert_code if (ec) { dbg::error(ec.message().data()); return; }
 
 namespace cattus {
 namespace server {
@@ -25,82 +25,41 @@ namespace json = boost::json;
 namespace db = cattus::db;
 namespace dbg = cattus::debug;
 
-class Session : std::enable_shared_from_this<Session>{
-
-};
-
-class Server {
-    beast::net::io_context* ioc;
-    asio::ip::tcp::acceptor* acceptor;
-    asio::ssl::context* ctx;
+class Session : public std::enable_shared_from_this<Session>{
+    beast::ssl_stream<beast::tcp_stream> stream;
+    beast::flat_buffer buffer;
+    beast::http::request<beast::http::string_body> request;
+    beast::http::response<beast::http::string_body> response;
 
 public:
-    Server(const char* addr, const char* port) {
-        auto           _addr = beast::net::ip::make_address(addr);
-        unsigned short _port = atoi(port);
-        unsigned int   _threads = std::thread::hardware_concurrency();
+    explicit Session(asio::ip::tcp::socket&& socket, boost::asio::ssl::context& ctx) : stream(std::move(socket), ctx) {}
 
-        ioc = new beast::net::io_context(_threads);
-
-        ctx = new asio::ssl::context(asio::ssl::context::sslv23_server);
-
-        ctx->set_options(
-            asio::ssl::context::default_workarounds |
-            asio::ssl::context::sslv23 |
-            asio::ssl::context::no_sslv2
-        );
-
-        ctx->use_certificate_chain_file("CACert.pem");
-
-        ctx->use_private_key_file("CAKey.pem", asio::ssl::context::pem);
-
-        asio::ip::tcp::endpoint endpoint(_addr, _port);
-        acceptor = new asio::ip::tcp::acceptor(*ioc);
-        acceptor->open(endpoint.protocol());
-
-        acceptor->set_option(beast::net::socket_base::reuse_address(true));
-        
-        acceptor->bind(endpoint);
-
-        acceptor->listen(beast::net::socket_base::max_listen_connections);
-
-        acceptor->async_accept(ioc->get_executor(), std::bind_front(&Server::handle, this));
+    static auto spawn(asio::ip::tcp::socket&& socket, boost::asio::ssl::context& ctx) {
+        auto session = std::make_shared<Session>(std::move(socket), ctx);
+        beast::net::dispatch(session->stream.get_executor(), std::bind_front(&Session::handshake, session->shared_from_this()));
+        return session;
     }
 
-    ~Server() {
-        delete acceptor;
-        delete ctx;
-        delete ioc;
+    void handshake() {
+        beast::get_lowest_layer(stream).expires_after(std::chrono::seconds(30));
+        stream.async_handshake(asio::ssl::stream_base::server, std::bind_front(&Session::read, shared_from_this()));
     }
 
-    void handle(beast::error_code ec, asio::ip::tcp::socket socket) {
+    void read(beast::error_code ec) {
+        assert_code(ec);
+        request = {};
 
-        // cria o fluxo ssl em torno do socket
-        beast::ssl_stream<asio::ip::tcp::socket&> stream(socket, *ctx);
+        beast::get_lowest_layer(stream).expires_after(std::chrono::seconds(30));
+        beast::http::async_read(stream, buffer, request, std::bind_front(&Session::handle, shared_from_this()));
+    }
 
-        // realiza o handshake
-        stream.handshake(asio::ssl::stream_base::server, ec);
+    void handle(beast::error_code ec, size_t transfered) {
+        boost::ignore_unused(transfered);
 
-        if (ec) {
-            dbg::error(ec.message().data());
-            return;
-        }
-
-        // le a requisi��o
-        beast::http::request<beast::http::string_body> request;
-        beast::http::response<beast::http::string_body> response;
+        response = {};
         CommandResult result;
 
-        // monta o buffer
-        beast::flat_buffer buffer(8192);
-
-        // le a requisi��o
-        beast::http::read(stream, buffer, request);
-
-
-        // recupera o nome do comando
         std::string command_name;
-        // monta os dados para o comando
         CommandData args;
         try {
             std::string command_args = request.at("Arguments");
@@ -108,33 +67,20 @@ public:
             args.update(command_args);
         }
         catch (std::exception e) {
-            dbg::error("header incompleto ou incorreto");
-            dbg::error(e.what());
-            response.result(beast::http::status::bad_request);
-            response.keep_alive(false);
-            response.reason("header incompleto ou incorreto");
-            beast::http::write(stream, response);
+            fail("header incompleto ou incorreto", beast::http::status::bad_request, &e);
             return;
         }
 
-        
+
         if (!command_name.size()) {
-            dbg::error("comando nao especificado");
-            response.result(beast::http::status::bad_request);
-            response.keep_alive(false);
-            response.reason("comando nao especificado");
-            beast::http::write(stream, response);
+            fail("comando nao especificado", beast::http::status::bad_request);
             return;
         }
-        
+
         // busca pelo comando
-        Command &command = Command::find(command_name.data());
+        Command& command = Command::find(command_name.data());
         if (!&command) {
-            dbg::error("comando nao encontrado");
-            response.result(beast::http::status::not_found);
-            response.keep_alive(false);
-            response.reason("comando nao encontrado");
-            beast::http::write(stream, response);
+            fail("comando nao encontrado", beast::http::status::not_found);
             return;
         }
 
@@ -143,26 +89,16 @@ public:
             result = command.Command::run(command_name.data(), args);
         }
         catch (std::exception e) {
-            dbg::error(e.what());
-            response.result(beast::http::status::internal_server_error);
-            response.keep_alive(false);
-            response.body() = e.what();
-            response.set(beast::http::field::content_type, "text/text");
-            response.content_length(response.body().size());
-            beast::http::write(stream, response);
+            fail("falha ao executar comando", beast::http::status::internal_server_error, &e);
             return;
         }
 
         // verifica o resultado do comando
         if (result == CommandResult::Error) {
-            dbg::error("falha ao executar comando");
-            response.result(beast::http::status::not_acceptable);
-            response.keep_alive(false);
-            response.reason("falha ao executar comando");
-            beast::http::write(stream, response);
+            fail("falha ao executar comando", beast::http::status::not_acceptable);
             return;
         }
-
+        
         // configura o response
         response.version(request.version());
         response.keep_alive(false);
@@ -174,21 +110,90 @@ public:
         // adiciona os dados do comando
         response.body() = command.getResponse();
         response.content_length(response.body().size());
-        
+
         // envia o response
-        beast::http::write(stream, response);
+        beast::get_lowest_layer(stream).expires_after(std::chrono::seconds(30));
+        beast::http::async_write(stream, response, std::bind_front(&Session::shutdown, shared_from_this()));
     }
 
-    void run() {
-        ioc->run();
+    void shutdown(beast::error_code ec, size_t transfered) {
+        boost::ignore_unused(transfered);
+        assert_code(ec);
+        beast::get_lowest_layer(stream).expires_after(std::chrono::seconds(30));
+        stream.shutdown();
+        //stream.async_shutdown([&](beast::error_code ec) { assert_code(ec); });
+    }
+
+    void fail(string reason, beast::http::status status, exception *e=nullptr) {
+        dbg::error(reason.data());
+        if (e) dbg::error(e->what());
+
+        response.result(status);
+        response.keep_alive(false);
+        response.reason(reason);
+        response.body() = e->what();
+        response.set(beast::http::field::content_type, "text/text");
+        response.content_length(response.body().size());
+        beast::get_lowest_layer(stream).expires_after(std::chrono::seconds(30));
+        beast::http::async_write(stream, response, std::bind_front(&Session::shutdown, shared_from_this()));
         return;
-        while (true) {
-            try {
-                // handle();
-            } catch (std::exception e){
-                dbg::error(e.what());
-            }
-        }
+    }
+};
+
+class Listener : public std::enable_shared_from_this<Listener> {
+    beast::net::io_context& ioc;
+    asio::ip::tcp::acceptor acceptor;
+    asio::ssl::context& ctx;
+
+public:
+    explicit Listener(beast::net::io_context& ioc, asio::ssl::context& ctx, asio::ip::tcp::endpoint endpoint) : ioc(ioc), ctx(ctx), acceptor(ioc) {
+        acceptor.open(endpoint.protocol());
+        acceptor.set_option(beast::net::socket_base::reuse_address(true));
+        acceptor.bind(endpoint);
+        acceptor.listen(beast::net::socket_base::max_listen_connections);
+    }
+
+    static auto spawn(beast::net::io_context& ioc, asio::ssl::context& ctx, asio::ip::tcp::endpoint endpoint) {
+        auto listener = std::make_shared<Listener>(ioc, ctx, endpoint);
+        listener->acceptor.async_accept(
+            beast::net::make_strand(ioc),
+            std::bind_front(&Listener::accept, listener->shared_from_this())
+        );
+        return listener;
+    }
+
+    void accept(beast::error_code ec, asio::ip::tcp::socket socket) {
+        assert_code(ec);
+        Session::spawn(std::move(socket), ctx);
+        acceptor.async_accept(beast::net::make_strand(ioc), std::bind_front(&Listener::accept, shared_from_this()));
+    }
+};
+
+class Server {
+public:
+    Server(const char* addr, const char* port) {
+        auto           _addr = beast::net::ip::make_address(addr);
+        unsigned short _port = atoi(port);
+        unsigned int   _threads = std::thread::hardware_concurrency();
+
+        beast::net::io_context ioc(_threads);
+        asio::ssl::context ctx(asio::ssl::context::sslv23_server);
+
+        ctx.set_options(
+            asio::ssl::context::default_workarounds |
+            asio::ssl::context::sslv23 |
+            asio::ssl::context::no_sslv2
+        );
+
+        ctx.use_certificate_chain_file("CACert.pem");
+
+        ctx.use_private_key_file("CAKey.pem", asio::ssl::context::pem);
+
+        asio::ip::tcp::endpoint endpoint(_addr, _port);
+
+        Listener::spawn(ioc, ctx, endpoint);
+
+        ioc.run();
     }
 };
 

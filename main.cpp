@@ -36,6 +36,5 @@ int main(int argc, char* argv[]) {
 	commands();
 
 	Server server("192.168.0.77", "50500");
-	server.run();
 
 }
