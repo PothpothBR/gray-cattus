@@ -1,79 +1,75 @@
 #define __debug_all__
 #include <iostream>
-#include <vector>
+#include <coroutine>
+#include <concepts>
 
-typedef int CommandResult;
-typedef void* CommandArgs;
-typedef CommandResult(*CommandCallable)(CommandArgs);
+struct Task {
+	struct promise_type {
+		Task get_return_object() { return { .h_ = std::coroutine_handle<promise_type>::from_promise(*this) }; }
+		std::suspend_always initial_suspend() { return {}; }
+		std::suspend_never final_suspend() noexcept { return {}; }
+		void unhandled_exception() {}
+		void return_void() {}
+	};
 
-class Command {
-	static std::vector<Command*> command_table;
-	const char* name;
-	CommandCallable command;
+	std::coroutine_handle<promise_type> h_;
 
-public:
-	Command(Command&&) = delete;
-	Command(Command&) = delete;
-
-	Command(const char* name, CommandCallable command) {
-		this->name = name;
-		this->command = command;
-		command_table.push_back(this);
-	}
-
-	static Command& find(const char* name) {
-		for (Command* command : command_table) {
-			for (char* c = const_cast<char*>(command->name), *n = const_cast<char*>(name); *c == *n; c++, n++) {
-				if (*c == '\0') {
-					return *command;
-				}
-			}
-		}
-		return *(Command*)0;
-	}
-
-	static CommandResult run(const char* name, CommandArgs args) {
-		for (Command* command : command_table) {
-			for (
-				char* c = const_cast<char*>(command->name), *n = const_cast<char*>(name);
-				*c == *n;
-				c++, n++
-			) {
-				if (*c == '\0') {
-					return command->command(args);
-				}
-			}
-		}
-		return -1;
-	}
-
-	CommandResult operator()(CommandArgs args) {
-		return command(args);
-	}
-
-	bool isNull() {
-		return this == nullptr;
-	}
-
-	static void freeCommands() {
-		for (Command* command : command_table) {
-			delete command;
-		}
-	}
+	operator std::coroutine_handle<promise_type>() const { return h_; }
+	operator std::coroutine_handle<>() const { return h_; }
 };
-std::vector<Command*> Command::command_table;
 
-void sla() {
-	new Command("Teste", [](CommandArgs args) {
-		std::cout << "Exec: Teste" << std::endl;
-		return (CommandResult)0;
-	});
+template<typename T>
+struct Generator {
+	struct promise_type {
+		T value_;
+		Generator get_return_object() { return { .h_ = std::coroutine_handle<promise_type>::from_promise(*this) }; }
+		std::suspend_never initial_suspend() { return {}; }
+		std::suspend_never final_suspend() noexcept { return {}; }
+		void unhandled_exception() {}
+		std::suspend_always yield_value(T value) {
+			value_ = value;
+			return {};
+		}
+		void return_void() {}
+	};
+
+	std::coroutine_handle<promise_type> h_;
+
+	operator std::coroutine_handle<promise_type>() const { return h_; }
+	operator std::coroutine_handle<>() const { return h_; }
+};
+
+
+Task teste() {
+	for (int i = 0;; i++) {
+		std::cout << "counter" << i << std::endl;
+		co_await std::suspend_always{};
+	}
+}
+
+Task testex() {
+	for (int i = 0;; i++) {
+		std::cout << "counter" << i << std::endl;
+		co_await std::suspend_always{};
+	}
+}
+
+Generator<int> teste2() {
+	for (int i = 0;; i++) {
+		co_yield i;
+	}
 }
 
 int main(int argc, char *argv[]) {
+	std::coroutine_handle<Task::promise_type> h = teste();
+	h();
+	h.destroy();
 
-	sla();
-	std::cout << "Result " << Command::run("Teste", 0);
-
-	Command::freeCommands();
+	auto h2 = teste2().h_;
+	auto& promise = h2.promise();
+	for (int i = 0;; i++) {
+		
+		std::cout << "counter" << promise.value_ << std::endl;
+		h2();
+	}
 }

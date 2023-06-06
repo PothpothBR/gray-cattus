@@ -54,6 +54,7 @@ public:
     }
 
     void handle(beast::error_code ec, size_t transfered) {
+        assert_code(ec);
         boost::ignore_unused(transfered);
 
         response = {};
@@ -117,11 +118,14 @@ public:
     }
 
     void shutdown(beast::error_code ec, size_t transfered) {
-        boost::ignore_unused(transfered);
         assert_code(ec);
+        boost::ignore_unused(transfered);
         beast::get_lowest_layer(stream).expires_after(std::chrono::seconds(30));
-        stream.shutdown();
-        //stream.async_shutdown([&](beast::error_code ec) { assert_code(ec); });
+        stream.async_shutdown(std::bind_front(&Session::shutdown_clear, shared_from_this()));
+    }
+
+    void shutdown_clear(beast::error_code ec) {
+        assert_code(ec);
     }
 
     void fail(string reason, beast::http::status status, exception *e=nullptr) {
@@ -131,7 +135,7 @@ public:
         response.result(status);
         response.keep_alive(false);
         response.reason(reason);
-        response.body() = e->what();
+        if (e) response.body() = e->what();
         response.set(beast::http::field::content_type, "text/text");
         response.content_length(response.body().size());
         beast::get_lowest_layer(stream).expires_after(std::chrono::seconds(30));
@@ -155,17 +159,18 @@ public:
 
     static auto spawn(beast::net::io_context& ioc, asio::ssl::context& ctx, asio::ip::tcp::endpoint endpoint) {
         auto listener = std::make_shared<Listener>(ioc, ctx, endpoint);
-        listener->acceptor.async_accept(
-            beast::net::make_strand(ioc),
-            std::bind_front(&Listener::accept, listener->shared_from_this())
-        );
+        listener->try_accept();
         return listener;
+    }
+
+    void try_accept() {
+        acceptor.async_accept(beast::net::make_strand(ioc), std::bind_front(&Listener::accept, shared_from_this()));
     }
 
     void accept(beast::error_code ec, asio::ip::tcp::socket socket) {
         assert_code(ec);
         Session::spawn(std::move(socket), ctx);
-        acceptor.async_accept(beast::net::make_strand(ioc), std::bind_front(&Listener::accept, shared_from_this()));
+        try_accept();
     }
 };
 
@@ -175,6 +180,8 @@ public:
         auto           _addr = beast::net::ip::make_address(addr);
         unsigned short _port = atoi(port);
         unsigned int   _threads = std::thread::hardware_concurrency();
+
+        dbg::info("threads em uso: %i", _threads);
 
         beast::net::io_context ioc(_threads);
         asio::ssl::context ctx(asio::ssl::context::sslv23_server);
@@ -193,6 +200,13 @@ public:
 
         Listener::spawn(ioc, ctx, endpoint);
 
+        std::vector<std::jthread> pool;
+        pool.reserve(_threads - 1);
+        for (auto i = _threads - 1; i > 0; i--) {
+            pool.emplace_back(
+                [&ioc] { ioc.run(); }
+            );
+        }
         ioc.run();
     }
 };

@@ -109,7 +109,6 @@ class Command {
 	CommandData response;
 
 public:
-
 	Command(std::string name, CommandCallable *command): command(std::move(*command)) {
 		command = nullptr;
 		this->name = name;
@@ -123,14 +122,14 @@ public:
 	CommandResult run(CommandData& args) {
 		dbg::log("%s%s", name.data(), args.serialize().data());
 		response.clear();
-		//cattus::db::global_conn.begin(); // fails wen multithread
+		cattus::db::global_conn.begin(); // fails wen multithread
 		try {
 			CommandResult res = command(args, response);
-		//	cattus::db::global_conn.commit();
+			cattus::db::global_conn.commit();
 			return res;
 		}
 		catch (exception e) {
-		//	cattus::db::global_conn.roolback();
+			cattus::db::global_conn.roolback();
 			return CommandResult::Error;
 		}
 	}

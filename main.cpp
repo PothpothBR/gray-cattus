@@ -15,7 +15,6 @@ void commands() {
 		});
 		
 	Command("RevelationCommand", [](CommandData& args, CommandData& response) {
-		std::cout << "Lucas é gay";
 	return CommandResult::Sucess;
 		});
 
@@ -24,8 +23,9 @@ void commands() {
 		//cattus::db::Connection conn("localhost", "5432", "feneco_database", "postgres", "chopinzinho0202");
 		std::string query = "select * from users where id = ";
 	query.append(args.get<std::string>("userId").value());
-	cattus::db::Data* data = cattus::db::global_conn.execute(query.data());
-	response.update(data->getJson());
+	cattus::db::Data &&data = cattus::db::global_conn.execute(query.data());
+	//dbg::info("%i", data.get<int>("id"));
+	response.update(data.getJson());
 	return CommandResult::Sucess;
 		});
 }

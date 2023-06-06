@@ -12,7 +12,7 @@ namespace cattus {
 namespace db {
 
 class Data {
-    PGresult* res = nullptr;
+    PGresult *res;
     unsigned int index = 0;
     unsigned int rows = 0;
     ExecStatusType status_bit = PGRES_NONFATAL_ERROR;
@@ -20,19 +20,22 @@ class Data {
     char* verify_bit = nullptr;
 
 public:
-    Data(PGresult* result) { res = result; }
-    Data() {}
-    ~Data() {
-        PQclear(res);
-        if (this->verify_bit) delete this->verify_bit;
-    }
-
-    Data& operator=(PGresult* result) {
-        PQclear(res);
-        res = result;
+    Data(PGresult* result) : res(result) {
         status_bit = PQresultStatus(res);
         rows = PQntuples(res);
+    }
+    ~Data() {
+        if (res) PQclear(res);
+    }
+    Data& operator=(Data&& other) {
+        res = std::move(other.res);
+        other.res = nullptr;
         return *this;
+    }
+
+    Data(Data&& other) {
+        res = std::move(other.res);
+        other.res = nullptr;
     }
 
     inline const char* getString(unsigned int column) {
@@ -46,37 +49,51 @@ public:
         return "";
     }
 
-    long int getLong(unsigned int column) { return strtol(getString(column), &verify_bit, 10); }
-    long int getLong(const char* column) { return strtol(getString(column), &verify_bit, 10); }
+    template<typename T>
+    inline void get(T column, long int *res) { *res = strtol(getString(column), &verify_bit, 10); }
 
-    long long int getLLong(unsigned int column) { return strtoll(getString(column), &verify_bit, 10); }
-    long long int getLLong(const char* column) { return strtoll(getString(column), &verify_bit, 10); }
+    template<typename T>
+    inline void get(T column, long long int* res) { *res = strtoll(getString(column), &verify_bit, 10); }
 
-    float getFloat(unsigned int column) { return strtof(getString(column), &verify_bit); }
-    float getFloat(const char* column) { return strtof(getString(column), &verify_bit); }
+    template<typename T>
+    inline void get(T column, float *res) { *res = strtof(getString(column), &verify_bit); }
 
-    double getDouble(unsigned int column) { return strtod(getString(column), &verify_bit); }
-    double getDouble(const char* column) { return strtod(getString(column), &verify_bit); }
+    template<typename T>
+    inline void get(T column, double* res) { *res = strtod(getString(column), &verify_bit); }
 
-    long double getLDouble(unsigned int column) { return strtold(getString(column), &verify_bit); }
-    long double getLDouble(const char* column) { return strtold(getString(column), &verify_bit); }
+    template<typename T>
+    inline void get(T column, long double* res) { *res = strtold(getString(column), &verify_bit); }
 
-    unsigned long int getULong(unsigned int column) { return strtoul(getString(column), &verify_bit, 10); }
-    unsigned long int getULong(const char* column) { return strtoul(getString(column), &verify_bit, 10); }
+    template<typename T>
+    inline void get(T column, unsigned long int* res) { *res = strtoul(getString(column), &verify_bit, 10); }
 
-    unsigned long long int getULLong(unsigned int column) { return strtoull(getString(column), &verify_bit, 10); }
-    unsigned long long int getULLong(const char* column) { return strtoull(getString(column), &verify_bit, 10); }
+    template<typename T>
+    inline void get(T column, unsigned long long int* res) { *res = strtoull(getString(column), &verify_bit, 10); }
+    
+    template<typename T>
+    inline void get(T column, int* res) { *res = static_cast<int>(strtol(getString(column), &verify_bit, 10)); }
+    
+    template<typename T>
+    inline void get(T column, unsigned int* res) { *res = static_cast<unsigned int>(strtoul(getString(column), &verify_bit, 10)); }
 
-    int getInt(unsigned int column) { return getLong(column); }
-    int getInt(const char* column) { return getLong(column); }
+    template<typename T>
+    inline void get(T column, bool* res) { *res = static_cast<bool>(strtol(getString(column), &verify_bit, 10));  }
 
-    unsigned int getUInt(unsigned int column) { return getULong(column); }
-    unsigned int getUInt(const char* column) { return getULong(column); }
+    template <typename L>
+    inline L get(unsigned int column) {
+        L res;
+        get(column, &res);
+        return res;
+    }
 
-    bool getBool(unsigned int column) { return getLong(column); }
-    bool getBool(const char* column) { return getLong(column); }
+    template <typename L>
+    inline L get(const char* column) {
+        L res;
+        get(column, &res);
+        return res;
+    }
 
-    bool getNull() { return !*verify_bit; }
+    bool isNull() { return !*verify_bit; }
 
     bool status() {
         return status_bit == PGRES_TUPLES_OK || status_bit == PGRES_COMMAND_OK || status_bit == PGRES_EMPTY_QUERY;
