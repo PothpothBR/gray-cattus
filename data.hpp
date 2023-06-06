@@ -130,11 +130,11 @@ public:
         return true;
     }
 
-    bool begin() {
+    void begin() {
         index = 0;
     }
 
-    bool end() {
+    void end() {
         index = rows - 1;
     }
 };

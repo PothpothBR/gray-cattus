@@ -5,6 +5,9 @@
 #include "data.hpp"
 #include "debug.hpp"
 #include <semaphore>
+#include <iostream>
+#include <thread>
+#include <vector>
 
 namespace cattus {
 namespace db {
@@ -12,16 +15,9 @@ namespace db {
 namespace dbg = cattus::debug;
 
 class Connection {
-    /*
-        criar 4 conexões para o postgres
-        usar locks para sincronizar
-        distribuir a carga de query entre os mesmos internamente
-    */
-
     PGconn* conn = nullptr;
-    std::counting_semaphore<1> lockExecute{1};
-public:
 
+public:
     Connection(const char* host, const char* port, const char* db, const char* user, const char* password) {
         char* params = new char[1024];
         sprintf(
@@ -33,34 +29,34 @@ public:
         conn = PQconnectdb(params);
         if (!conn || PQstatus(conn) != CONNECTION_OK) {
             dbg::error("Falha ao conectar ao banco de dados");
-            lockExecute.acquire();
             PQerrorMessage(conn);
             PQfinish(conn);
-            lockExecute.release();
             conn = nullptr;
         }
 
-        // PQtrace(conn, stderr);
+        std::cout << "libpq (thread safety) " << PQisthreadsafe() << std::endl;
+
+        PQtrace(conn, stderr);
         delete[] params;
     }
 
+    Connection(Connection&& other){
+        conn = std::move(other.conn);
+        other.conn = nullptr;
+    }
+
     ~Connection() {
-        lockExecute.acquire();
         if (conn) PQfinish(conn);
-        lockExecute.release();
     }
 
     // criar uma função que retorna os valores e que faz type cast e verifica o tipo do valor usando o tipo na referencia da tabela
     cattus::db::Data execute(const char* query) {
-        lockExecute.acquire();
         cattus::db::Data data(PQexec(conn, query));
         if (!data.status()) dbg::error(data.getError());
-        lockExecute.release();
         return data;
     }
 
     void begin() {
-        lockExecute.acquire();
         PGresult* res;
         res = PQexec(conn, "BEGIN");
 
@@ -69,11 +65,9 @@ public:
         }
 
         PQclear(res);
-        lockExecute.release();
     }
 
     void roolback() {
-        lockExecute.acquire();
         PGresult* res;
         res = PQexec(conn, "ROOLBACK");
 
@@ -82,11 +76,9 @@ public:
         }
 
         PQclear(res);
-        lockExecute.release();
     }
 
     void commit() {
-        lockExecute.acquire();
         PGresult* res;
         res = PQexec(conn, "COMMIT");
 
@@ -95,13 +87,43 @@ public:
         }
 
         PQclear(res);
-        lockExecute.release();
     }
 
     bool status() {
         return conn && PQstatus(conn) == CONNECTION_OK;
     }
-} extern global_conn("localhost", "5432", "feneco_database", "postgres", "chopinzinho0202");
+} global_conn("localhost", "5432", "feneco_database", "postgres", "chopinzinho0202");
+
+class ConnectionPool{
+    static Connection** connPool;
+    static std::binary_semaphore lock;
+    static unsigned int index;
+
+    static void start(const char* host, const char* port, const char* db, const char* user, const char* password){
+        unsigned int concurrency = std::thread::hardware_concurrency();
+        lock.acquire();
+        connPool = new Connection*[concurrency];
+        for (int i = concurrency; i > 0; i--){
+            connPool[i] = new Connection(host, port, db, user, password);
+        }
+        lock.release();
+    }
+
+    static auto &&take(){
+        lock.acquire();
+        Connection* conn = connPool[index--];
+        lock.release();
+        return *conn;
+    }
+
+    static void reuse(auto conn){
+        lock.acquire();
+        connPool[index++] = conn;
+        lock.release();
+    }
+
+    ConnectionPool() = delete;
+};
 
 }
 }

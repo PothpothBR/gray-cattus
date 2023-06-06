@@ -24,6 +24,7 @@ namespace json = boost::json;
 
 namespace db = cattus::db;
 namespace dbg = cattus::debug;
+namespace cmd = cattus::command;
 
 class Session : public std::enable_shared_from_this<Session>{
     beast::ssl_stream<beast::tcp_stream> stream;
@@ -58,10 +59,10 @@ public:
         boost::ignore_unused(transfered);
 
         response = {};
-        CommandResult result;
+        cmd::CommandResult result;
 
         std::string command_name;
-        CommandData args;
+        cmd::CommandData args;
         try {
             std::string command_args = request.at("Arguments");
             command_name = request.at("Command");
@@ -79,7 +80,7 @@ public:
         }
 
         // busca pelo comando
-        Command& command = Command::find(command_name.data());
+        cmd::Command& command = cmd::Command::find(command_name.data());
         if (!&command) {
             fail("comando nao encontrado", beast::http::status::not_found);
             return;
@@ -95,7 +96,7 @@ public:
         }
 
         // verifica o resultado do comando
-        if (result == CommandResult::Error) {
+        if (result == cmd::CommandResult::Error) {
             fail("falha ao executar comando", beast::http::status::not_acceptable);
             return;
         }

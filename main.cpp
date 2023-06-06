@@ -5,6 +5,7 @@
 #include <locale>
 
 using namespace cattus::server;
+using namespace cattus::command;
 
 void commands() {
 

@@ -8,6 +8,9 @@
 #include <boost/json.hpp>
 #include "database.hpp"
 
+namespace cattus {
+namespace command{
+
 namespace json = boost::json;
 namespace dbg = cattus::debug;
 
@@ -122,7 +125,7 @@ public:
 	CommandResult run(CommandData& args) {
 		dbg::log("%s%s", name.data(), args.serialize().data());
 		response.clear();
-		cattus::db::global_conn.begin(); // fails wen multithread
+		cattus::db::global_conn.begin();
 		try {
 			CommandResult res = command(args, response);
 			cattus::db::global_conn.commit();
@@ -147,16 +150,13 @@ public:
 		return this == nullptr;
 	}
 
-	static void freeCommands() {
-		/*for (Command& command : command_table) {
-			delete &command;
-		}*/
-	}
-
 	std::string getResponse() {
 		return response.serialize();
 	}
 };
 std::unordered_map<std::string, Command> Command::command_table;
+		
+}
+}
 
 #endif //INCLUDE_COMMAND_H
