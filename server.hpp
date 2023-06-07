@@ -96,7 +96,7 @@ public:
         }
 
         // verifica o resultado do comando
-        if (result == cmd::CommandResult::Error) {
+        if (result.status == cmd::CommandStatus::Error) {
             fail("falha ao executar comando", beast::http::status::not_acceptable);
             return;
         }
@@ -110,7 +110,7 @@ public:
         response.set(beast::http::field::content_type, "text/json");
 
         // adiciona os dados do comando
-        response.body() = command.getResponse();
+        response.body() = result.response.serialize();
         response.content_length(response.body().size());
 
         // envia o response

@@ -7,9 +7,9 @@ endif()
 
 set(CMAKE_CXX_STANDARD 23)
 
-if (!UNIX)
+if (WIN32)
 add_compile_options(/bigobj)
-endif (!UNIX)
+endif (WIN32)
 
 
 project(GrayCattus

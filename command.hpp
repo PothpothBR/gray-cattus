@@ -13,6 +13,7 @@ namespace command{
 
 namespace json = boost::json;
 namespace dbg = cattus::debug;
+namespace db = cattus::db;
 
 class CommandData {
 protected:
@@ -98,18 +99,22 @@ public:
 	}
 };
 
-enum CommandResult {
+enum CommandStatus {
 	Error = -1,
 	Sucess = 0
 };
 
-typedef CommandResult(CommandCallable)(CommandData&, CommandData&);
+struct CommandResult {
+	CommandStatus status;
+	CommandData response;
+};
+
+typedef CommandStatus(CommandCallable)(CommandData&, CommandData&, db::Connection& db);
 
 class Command {
 	static std::unordered_map<std::string, Command> command_table;
 	std::string name;
 	CommandCallable &command;
-	CommandData response;
 
 public:
 	Command(std::string name, CommandCallable *command): command(std::move(*command)) {
@@ -124,17 +129,19 @@ public:
 
 	CommandResult run(CommandData& args) {
 		dbg::log("%s%s", name.data(), args.serialize().data());
-		response.clear();
-		cattus::db::global_conn.begin();
+		CommandStatus res = CommandStatus::Error;
+		CommandData response;
+		auto conn = db::ConnectionPool::take();
+		conn->begin();
 		try {
-			CommandResult res = command(args, response);
-			cattus::db::global_conn.commit();
-			return res;
+			res = command(args, response, *conn);
+			conn->commit();
 		}
 		catch (exception e) {
-			cattus::db::global_conn.roolback();
-			return CommandResult::Error;
+			conn->roolback();
 		}
+		db::ConnectionPool::reuse(conn);
+		return { .status = res, .response = response };
 	}
 
 	static CommandResult run(const char* name, CommandData& args) {
@@ -142,16 +149,11 @@ public:
 	}
 
 	CommandResult operator()(CommandData args) {
-		response.clear();
-		return command(args, response);
+		return run(args);
 	}
 
 	bool isNull() {
 		return this == nullptr;
-	}
-
-	std::string getResponse() {
-		return response.serialize();
 	}
 };
 std::unordered_map<std::string, Command> Command::command_table;

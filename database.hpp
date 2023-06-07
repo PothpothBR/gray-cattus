@@ -36,17 +36,16 @@ public:
 
         std::cout << "libpq (thread safety) " << PQisthreadsafe() << std::endl;
 
-        PQtrace(conn, stderr);
         delete[] params;
     }
 
-    Connection(Connection&& other){
-        conn = std::move(other.conn);
-        other.conn = nullptr;
-    }
+   // Connection(Connection&& other) {
+        //conn = std::move(other.conn);
+        //other.conn = nullptr;
+    //}
 
     ~Connection() {
-        if (conn) PQfinish(conn);
+        //if (conn) PQfinish(conn);
     }
 
     // criar uma função que retorna os valores e que faz type cast e verifica o tipo do valor usando o tipo na referencia da tabela
@@ -92,28 +91,29 @@ public:
     bool status() {
         return conn && PQstatus(conn) == CONNECTION_OK;
     }
-} global_conn("localhost", "5432", "feneco_database", "postgres", "chopinzinho0202");
+};
 
 class ConnectionPool{
     static Connection** connPool;
     static std::binary_semaphore lock;
     static unsigned int index;
-
+public:
     static void start(const char* host, const char* port, const char* db, const char* user, const char* password){
-        unsigned int concurrency = std::thread::hardware_concurrency();
+        const unsigned int concurrency = std::thread::hardware_concurrency();
         lock.acquire();
         connPool = new Connection*[concurrency];
-        for (int i = concurrency; i > 0; i--){
+        index = concurrency;
+        for (unsigned int i = 0; i < concurrency; i++) {
             connPool[i] = new Connection(host, port, db, user, password);
         }
         lock.release();
     }
 
-    static auto &&take(){
+    static auto *take(){
         lock.acquire();
-        Connection* conn = connPool[index--];
+        Connection* conn = connPool[--index];
         lock.release();
-        return *conn;
+        return conn;
     }
 
     static void reuse(auto conn){
@@ -124,6 +124,10 @@ class ConnectionPool{
 
     ConnectionPool() = delete;
 };
+
+Connection** ConnectionPool::connPool;
+std::binary_semaphore ConnectionPool::lock{ 1 };
+unsigned int ConnectionPool::index;
 
 }
 }
