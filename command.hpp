@@ -110,6 +110,7 @@ struct CommandResult {
 };
 
 typedef CommandStatus(CommandCallable)(CommandData&, CommandData&, db::Connection& db);
+#define CommandMethod(name, code) Command(name, [](CommandData& args, CommandData& response, Connection &db)code)
 
 class Command {
 	static std::unordered_map<std::string, Command> command_table;

@@ -10,25 +10,23 @@ using namespace cattus::db;
 
 void commands() {
 
-	Command("EchoCommand", [](CommandData& args, CommandData& response, Connection &db) {
+	CommandMethod("EchoCommand", {
 		std::cout << args.get<int>("time").value_or(-1);
-	response.update(args);
-	return CommandStatus::Sucess;
-		});
+		response.update(args);
+		return CommandStatus::Sucess;
+	});
 		
-	Command("RevelationCommand", [](CommandData& args, CommandData& response, Connection &db) {
-	return CommandStatus::Sucess;
-		});
+	CommandMethod("RevelationCommand", {
+		return CommandStatus::Sucess;
+	});
 
-	Command("GetUsers", [](CommandData& args, CommandData& response, Connection &db) {
-		
+	CommandMethod("GetUsers", {
 		std::string query = "select * from users where id = ";
-	query.append(args.get<std::string>("userId").value());
-	cattus::db::Data &&data = db.execute(query.data());
-	//dbg::info("%i", data.get<int>("id"));
-	response.update(data.getJson());
-	return CommandStatus::Sucess;
-		});
+		query.append(args.get<std::string>("userId").value());
+		cattus::db::Data &&data = db.execute(query.data());
+		response.update(data.getJson());
+		return CommandStatus::Sucess;
+	});
 }
 
 int main(int argc, char* argv[]) {
