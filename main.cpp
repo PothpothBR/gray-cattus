@@ -31,7 +31,7 @@ void commands() {
 
 int main(int argc, char* argv[]) {
 	setlocale(LC_ALL, "");
-	ConnectionPool::start("localhost", "5432", "feneco_database", "postgres", "chopinzinho0202");
+	ConnectionPool::start("localhost", "5432", "feneco_database", "postgres", "1234");
 	commands();
 
 	Server server("192.168.0.77", "50500");
